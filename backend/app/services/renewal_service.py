@@ -48,6 +48,7 @@ class RenewalService:
             new_due_at=new_due
         )
         db.add(renewal)
+        db.flush()
 
         # Cập nhật hạn mới vào Loans
         loan.due_at = new_due

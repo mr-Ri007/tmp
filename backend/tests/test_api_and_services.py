@@ -24,6 +24,7 @@ from app.repositories.fine_repo import fine_repo
 from app.schemas.fine import FinePageResponse
 from app.services.loan_service import LoanService
 from app.services.reservation_service import ReservationService
+from app.services.renewal_service import RenewalService
 from app.services.return_service import ReturnService
 
 
@@ -210,6 +211,44 @@ def test_reserve_flushes_reservation_before_marking_book_reserved():
 
     assert reservation.id == 1
     assert book.status == "DangCho"
+
+
+def test_renew_flushes_history_before_updating_loan_due_date():
+    old_due = dt.datetime(2025, 1, 15, 10, 0)
+    loan = SimpleNamespace(due_at=old_due)
+
+    class FakeDB:
+        def __init__(self):
+            self.scalar_results = iter([loan, None])
+            self.renewal = None
+            self.flushed = False
+
+        def scalar(self, statement):
+            return next(self.scalar_results)
+
+        def add(self, item):
+            self.renewal = item
+
+        def flush(self):
+            assert self.renewal is not None
+            assert loan.due_at == old_due
+            self.flushed = True
+
+        def commit(self):
+            assert self.flushed
+            assert loan.due_at == old_due + dt.timedelta(days=7)
+
+        def refresh(self, item):
+            item.id = 1
+
+    renewal = RenewalService.renew_book(
+        FakeDB(), loan_id=1, extension_days=7
+    )
+
+    assert renewal.id == 1
+    assert renewal.old_due_at == old_due
+    assert renewal.new_due_at == old_due + dt.timedelta(days=7)
+    assert loan.due_at == renewal.new_due_at
 
 
 def test_returning_lost_book_marks_copy_unavailable():
