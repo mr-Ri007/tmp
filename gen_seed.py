@@ -292,7 +292,7 @@ def handle_demand(t):
 
 
 def handle_return(loan, copy, rd, t):
-    copy["state"] = "SanSang"
+    copy["state"] = "MatSach" if loan["cond"] == "Mat" else "SanSang"
     active[rd["id"]] -= 1
     ret = dict(loan=loan, returned=t, cond=loan["cond"])
     returns.append(ret)
@@ -443,7 +443,7 @@ for c in hard_books:
         c["state"] = "DangMuon"
     elif c["hold"] is not None and c["hold"]["status"] == "ChoNhan":
         c["state"] = "DangCho"
-    else:
+    elif c["state"] != "MatSach":
         c["state"] = "SanSang"
 
 # --- lịch sử truy cập bản mềm

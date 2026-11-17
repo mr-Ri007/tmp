@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Optional, Literal
+from typing import List, Optional, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -12,6 +12,7 @@ class ReaderBase(BaseModel):
         pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$",
         description="Email độc giả (không trùng, định dạng hợp lệ)"
     )
+    phone: Optional[str] = Field(None, max_length=20, description="Số điện thoại độc giả")
     national_id: Optional[str] = Field(None, max_length=12, description="Số CCCD (12 chữ số nếu có)")
     reader_type: Literal["Sinh vien", "Giang vien", "Nghien cuu sinh"] = Field(
         ...,
@@ -37,6 +38,7 @@ class ReaderUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     date_of_birth: Optional[dt.date] = None
     email: Optional[str] = Field(None, max_length=100, pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
+    phone: Optional[str] = Field(None, max_length=20)
     national_id: Optional[str] = Field(None, max_length=12)
     reader_type: Optional[Literal["Sinh vien", "Giang vien", "Nghien cuu sinh"]] = None
 
@@ -55,3 +57,8 @@ class ReaderResponse(ReaderBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ReaderListResponse(BaseModel):
+    items: List[ReaderResponse]
+    total: int

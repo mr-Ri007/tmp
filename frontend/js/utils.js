@@ -7,7 +7,7 @@ export function toast(msg, type = 'info', duration = 3500) {
   const wrap = document.getElementById('toast-container');
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.innerHTML = `<span class="toast-icon">${icons[type] || ''}</span><span>${msg}</span>`;
+  el.innerHTML = `<span>${msg}</span>`;
   wrap.appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
   setTimeout(() => {
@@ -15,7 +15,68 @@ export function toast(msg, type = 'info', duration = 3500) {
     setTimeout(() => el.remove(), 350);
   }, duration);
 }
-const icons = { success: '✔', error: '✖', info: 'ℹ', warning: '⚠' };
+// ── Debounce ──────────────────────────────────────────────────────────────────
+export function debounce(fn, wait) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
+// ── Custom confirm dialog (replaces browser confirm) ──────────────────────────
+export function confirmDialog(message, title = 'Xác nhận') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal open';
+    overlay.innerHTML = `
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-header" style="background:var(--danger-lt);border-color:var(--danger)">
+          <h2 style="color:var(--danger);margin:0">${title}</h2>
+          <button class="modal-close" style="color:var(--danger)">✕</button>
+        </div>
+        <div class="modal-body" style="text-align:center;padding:32px 24px">
+          <p style="margin:0 0 24px;color:var(--text)">${message}</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="confirm-cancel">Huỷ</button>
+          <button class="btn btn-danger" id="confirm-ok">Đồng ý</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const ok = overlay.querySelector('#confirm-ok');
+    const cancel = overlay.querySelector('#confirm-cancel');
+    const closeBtn = overlay.querySelector('.modal-close');
+    const cleanup = () => { overlay.remove(); };
+    ok.addEventListener('click', () => { cleanup(); resolve(true); });
+    cancel.addEventListener('click', () => { cleanup(); resolve(false); });
+    closeBtn.addEventListener('click', () => { cleanup(); resolve(false); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) { cleanup(); resolve(false); } });
+  });
+}
+
+// ── Button loading state ──────────────────────────────────────────────────────
+export function setButtonLoading(btn, loading, originalText = null) {
+  if (!btn) return;
+  if (loading) {
+    if (originalText === null) btn.dataset.originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></span> Đang xử lý…';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.originalText || originalText || btn.innerHTML;
+    delete btn.dataset.originalText;
+  }
+}
+
+// ── Spinner CSS (injected once) ───────────────────────────────────────────────
+if (!document.getElementById('util-spinner-style')) {
+  const s = document.createElement('style');
+  s.id = 'util-spinner-style';
+  s.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+  document.head.appendChild(s);
+}
 
 // ── Loading spinner ───────────────────────────────────────────────────────────
 export function showLoading(selector = '#main-content') {
@@ -42,6 +103,7 @@ export function fmtMoney(val) {
 export function fmtStatus(s) {
   const map = {
     SanSang: '<span class="badge badge-success">Sẵn sàng</span>',
+    DangCho: '<span class="badge badge-info">Đang giữ</span>',
     DangMuon: '<span class="badge badge-warning">Đang mượn</span>',
     MatSach: '<span class="badge badge-danger">Mất sách</span>',
     HongSach: '<span class="badge badge-secondary">Hỏng sách</span>',
@@ -53,6 +115,8 @@ export function fmtStatus(s) {
 export function fmtCondition(c) {
   const map = {
     Tot: '<span class="badge badge-success">Tốt</span>',
+    Hong: '<span class="badge badge-warning">Hỏng</span>',
+    Mat: '<span class="badge badge-danger">Mất sách</span>',
     HongNhe: '<span class="badge badge-warning">Hỏng nhẹ</span>',
     HongNang: '<span class="badge badge-danger">Hỏng nặng</span>',
     MatSach: '<span class="badge badge-danger">Mất sách</span>',
@@ -140,7 +204,10 @@ export function buildTable(container, columns, rows, actions = null) {
       actions(row).forEach(a => {
         const btn = document.createElement('button');
         btn.className = `btn btn-sm ${a.cls || 'btn-secondary'}`;
-        btn.textContent = a.label;
+        if (a.html) btn.innerHTML = a.html;
+        else btn.textContent = a.label;
+        if (a.ariaLabel) btn.setAttribute('aria-label', a.ariaLabel);
+        if (a.title) btn.title = a.title;
         btn.addEventListener('click', () => a.onClick(row));
         td.appendChild(btn);
       });
@@ -151,6 +218,14 @@ export function buildTable(container, columns, rows, actions = null) {
   tbl.appendChild(tbody);
   container.innerHTML = '';
   container.appendChild(tbl);
+}
+
+export function eyeIconMarkup() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+}
+
+export function eyeOffIconMarkup() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a15.7 15.7 0 0 1-3.1 3.8"/><path d="M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10.7 10.7 0 0 0 2.1-.2"/></svg>';
 }
 
 // ── Form value helpers ────────────────────────────────────────────────────────

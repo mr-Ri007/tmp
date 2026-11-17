@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy import select, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from app.models.source import Source
 from app.schemas.source import SourceCreate, SourceUpdate
@@ -7,6 +7,25 @@ from app.repositories.base import CRUDBase
 
 
 class CRUDSource(CRUDBase[Source, SourceCreate, SourceUpdate]):
+    def count(
+        self,
+        db: Session,
+        *,
+        query: Optional[str] = None,
+        genre: Optional[str] = None
+    ) -> int:
+        stmt = select(func.count()).select_from(Source)
+        if query:
+            stmt = stmt.where(
+                or_(
+                    Source.title.ilike(f"%{query}%"),
+                    Source.author.ilike(f"%{query}%")
+                )
+            )
+        if genre:
+            stmt = stmt.where(Source.genre == genre)
+        return db.scalar(stmt) or 0
+
     def search(
         self,
         db: Session,

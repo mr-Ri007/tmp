@@ -1,9 +1,11 @@
 # TÀI LIỆU THIẾT KẾ VÀ MÔ TẢ CƠ SỞ DỮ LIỆU
 ## HỆ THỐNG QUẢN LÝ THƯ VIỆN SỐ ĐA CHI NHÁNH (LIBRARY MANAGEMENT SYSTEM)
 
-Phiên bản: **2.0 (Cập nhật nghiệp vụ tính tiền phạt)**  
+Phiên bản: **2.1 (Không cho mượn lại bản sao đã mất)**
 Hệ quản trị CSDL mục tiêu: **MySQL 8.0+ / MySQL 8.4 LTS**  
 Quy ước đặt tên: Bảng số nhiều viết hoa (`Readers`, `Sources`), Khóa ngoại `<tên_bảng_số_ít>_id`, Dấu thời gian có hậu tố `_at`.
+
+Database hiện có cần chạy `migration_lost_hard_book_status.sql` để bổ sung trạng thái sách mất, sửa các trigger liên quan và đánh dấu lại các bản sao có lần mượn gần nhất được ghi nhận là mất. Chạy migration này trước khi triển khai backend mới.
 
 ---
 
@@ -45,7 +47,7 @@ erDiagram
         int id PK
         int source_id FK
         int branch_id FK
-        varchar status "SanSang/DangCho/DangMuon"
+        varchar status "SanSang/DangCho/DangMuon/MatSach"
     }
 
     Ebooks {
@@ -159,7 +161,7 @@ Mỗi bản ghi đại diện cho 1 cuốn sách vật lý cụ thể tại 1 ch
 | `id` | `INT` | `PK, AUTO_INCREMENT` | Mã vạch / số định danh bản sao |
 | `source_id` | `INT` | `FK -> Sources(id), NOT NULL` | Thuộc đầu sách nào |
 | `branch_id` | `INT` | `FK -> Branches(id), NOT NULL`| Đang đặt tại chi nhánh nào |
-| `status` | `VARCHAR(10)` | `NOT NULL DEFAULT 'SanSang', CHECK IN ('SanSang','DangCho','DangMuon')` | Trạng thái hiện tại của bản sao |
+| `status` | `VARCHAR(10)` | `NOT NULL DEFAULT 'SanSang', CHECK IN ('SanSang','DangCho','DangMuon','MatSach')` | Trạng thái hiện tại của bản sao |
 
 ### 2.3. Bảng `Ebooks` (Tài liệu điện tử)
 Mỗi đầu sách có tối đa 1 bản mềm điện tử (quan hệ 1-1).
@@ -264,12 +266,12 @@ WHERE r.id IS NULL;
 | :--- | :--- | :--- | :--- |
 | `trg_readers_age_ins` | `Readers` | `BEFORE INSERT` | Chặn tạo độc giả nếu chưa đủ 16 tuổi |
 | `trg_readers_age_upd` | `Readers` | `BEFORE UPDATE` | Chặn cập nhật ngày sinh nếu tuổi < 16 |
-| `trg_loans_before` | `Loans` | `BEFORE INSERT` | Kiểm tra: (1) Bản sao không ở trạng thái DangMuon; (2) Bản sao DangCho chỉ người đặt mới được mượn; (3) Sinh viên mượn tối đa 5 cuốn; (4) Tổng tiền phạt chưa nộp không vượt quá 100.000đ |
+| `trg_loans_before` | `Loans` | `BEFORE INSERT` | Kiểm tra: (1) Bản sao MatSach không được mượn; (2) Bản sao không ở trạng thái DangMuon; (3) Bản sao DangCho chỉ người đặt mới được mượn; (4) Sinh viên mượn tối đa 5 cuốn; (5) Tổng tiền phạt chưa nộp không vượt quá 100.000đ |
 | `trg_loans_after` | `Loans` | `AFTER INSERT` | Chuyển `Hard_books.status` sang `'DangMuon'`; cập nhật `Reservations.status` sang `'DaNhan'` |
 | `trg_renewals_before` | `Renewals`| `BEFORE INSERT` | Chặn gia hạn nếu sách đã trả hoặc hạn cũ không khớp |
 | `trg_renewals_after` | `Renewals` | `AFTER INSERT` | Cập nhật hạn trả mới `Loans.due_at = NEW.new_due_at` |
 | `trg_returns_before` | `Return_records` | `BEFORE INSERT` | Kiểm tra ngày trả thực tế phải $\ge$ ngày mượn |
-| `trg_returns_after` | `Return_records` | `AFTER INSERT` | (1) Chuyển sách về `SanSang`; (2) **Tính phạt tự động**: Lost = 100% giá bìa; Hong = không tự động phạt; Late = 10% giá bìa $\times$ số ngày quá hạn (nếu điều kiện Tot) |
+| `trg_returns_after` | `Return_records` | `AFTER INSERT` | (1) Sách mất chuyển sang `MatSach`; các tình trạng khác về `SanSang`; (2) **Tính phạt tự động**: Lost = 100% giá bìa; Hong = không tự động phạt; Late = 10% giá bìa $\times$ số ngày quá hạn (nếu điều kiện Tot) |
 | `trg_fines_before_ins`| `Fines` | `BEFORE INSERT` | Chặn tạo 2 khoản phạt trùng lặp trên cùng 1 phiếu trả |
 | `trg_reservations_before`| `Reservations` | `BEFORE INSERT` | Chặn đặt trước nếu sách không ở trạng thái `SanSang` |
 | `trg_reservations_after` | `Reservations` | `AFTER INSERT` | Chuyển `Hard_books.status` sang `'DangCho'` |

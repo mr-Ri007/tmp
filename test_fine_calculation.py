@@ -68,8 +68,10 @@ class MockDatabase:
         source = self.sources[self.hard_books[v_book]["source_id"]]
         v_price = source["price"]
 
-        # Cập nhật sách về SanSang
-        self.hard_books[v_book]["status"] = "SanSang"
+        # Bản sao mất bị loại khỏi kho; các bản sao khác sẵn sàng trở lại
+        self.hard_books[v_book]["status"] = (
+            "MatSach" if new_record["return_condition"] == "Mat" else "SanSang"
+        )
 
         # DATEDIFF(DATE(returned_at), DATE(due_at))
         v_late = (new_record["returned_at"].date() - v_due.date()).days
@@ -161,15 +163,25 @@ def run_tests():
     db.add_loan(4, 1, 1004, borrow_date, due_date)
     db.insert_return_record(4, 4, "PT004", dt.datetime(2026, 10, 15, 11, 0, 0), "Mat")
     fines_tc4 = [f for f in db.fines.values() if f["return_record_id"] == 4]
-    tc4_pass = len(fines_tc4) == 1 and fines_tc4[0]["amount"] == Decimal("200000.00") and fines_tc4[0]["fine_type"] == "Lost"
-    results.append(("TC4: Sách 200k, bị mất → phạt 200k", tc4_pass, f"Phạt: {fines_tc4[0]['amount'] if fines_tc4 else None} VNĐ, Loại: {fines_tc4[0]['fine_type'] if fines_tc4 else None}"))
+    tc4_pass = (
+        len(fines_tc4) == 1
+        and fines_tc4[0]["amount"] == Decimal("200000.00")
+        and fines_tc4[0]["fine_type"] == "Lost"
+        and db.hard_books[1004]["status"] == "MatSach"
+    )
+    results.append(("TC4: Sách 200k, bị mất → phạt 200k và loại khỏi kho", tc4_pass, f"Phạt: {fines_tc4[0]['amount'] if fines_tc4 else None} VNĐ, Trạng thái: {db.hard_books[1004]['status']}"))
 
     # TC 5: Sách giá 200.000đ, quá hạn 3 ngày rồi bị mất → chỉ phạt 200.000đ
     db.add_loan(5, 1, 1005, borrow_date, due_date)
     db.insert_return_record(5, 5, "PT005", dt.datetime(2026, 10, 18, 14, 0, 0), "Mat")
     fines_tc5 = [f for f in db.fines.values() if f["return_record_id"] == 5]
-    tc5_pass = len(fines_tc5) == 1 and fines_tc5[0]["amount"] == Decimal("200000.00") and fines_tc5[0]["fine_type"] == "Lost"
-    results.append(("TC5: Sách 200k, quá hạn 3 ngày rồi mất → chỉ phạt 200k", tc5_pass, f"Phạt: {fines_tc5[0]['amount'] if fines_tc5 else None} VNĐ, Loại: {fines_tc5[0]['fine_type'] if fines_tc5 else None}"))
+    tc5_pass = (
+        len(fines_tc5) == 1
+        and fines_tc5[0]["amount"] == Decimal("200000.00")
+        and fines_tc5[0]["fine_type"] == "Lost"
+        and db.hard_books[1005]["status"] == "MatSach"
+    )
+    results.append(("TC5: Sách 200k, quá hạn rồi mất → chỉ phạt 200k và loại khỏi kho", tc5_pass, f"Phạt: {fines_tc5[0]['amount'] if fines_tc5 else None} VNĐ, Trạng thái: {db.hard_books[1005]['status']}"))
 
     # TC 6: Sách bị hỏng → chưa có khoản phạt tự động
     db.add_loan(6, 1, 1006, borrow_date, due_date)

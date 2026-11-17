@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.source import SourceResponse
 
@@ -18,9 +18,15 @@ class EbookUpdate(BaseModel):
 
 class EbookResponse(EbookBase):
     id: int
+    source: Optional[SourceResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class EbookDetailResponse(EbookResponse):
     source: Optional[SourceResponse] = None
+
+
+class EbookListResponse(BaseModel):
+    items: List[EbookResponse]
+    total: int

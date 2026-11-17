@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>📚 Library Management System</title>
+  <meta name="theme-color" content="#2563eb">
+  <title>Library Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,7 +17,7 @@
   <!-- ── Sidebar ──────────────────────────────────────────── -->
   <nav id="sidebar">
     <div class="sidebar-logo">
-      <span>📚</span> Thư Viện
+      Thư Viện
     </div>
     <nav id="sidebar-nav">
       <!-- populated by app.js -->
@@ -23,15 +27,20 @@
       <span id="status-text">Đang kiểm tra…</span>
     </div>
   </nav>
+  <div id="sidebar-overlay" aria-hidden="true"></div>
 
   <!-- ── Main wrapper ─────────────────────────────────────── -->
   <div id="main-wrapper">
 
     <!-- Topbar -->
     <header id="topbar">
-      <button id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
-      <span id="topbar-title">Hệ thống Quản lý Thư viện</span>
-      <a href="http://127.0.0.1:8000/docs" target="_blank" class="btn btn-secondary btn-sm">🔗 API Docs</a>
+      <div class="topbar-left">
+        <button id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+        <span id="topbar-title">Hệ thống Quản lý Thư viện</span>
+      </div>
+      <div class="topbar-right">
+        <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">Tài liệu API</a>
+      </div>
     </header>
 
     <!-- Page content renders here -->

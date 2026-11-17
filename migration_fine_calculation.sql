@@ -102,8 +102,12 @@ BEGIN
   JOIN Sources s ON s.id = hb.source_id
   WHERE l.id = NEW.loan_id;
 
-  -- 2. Cap nhat trang thai ban sao ve SanSang
-  UPDATE Hard_books SET status = 'SanSang' WHERE id = v_book;
+  -- 2. Ban sao mat se bi loai khoi; cac truong hop khac san sang tro lai
+  IF NEW.return_condition = 'Mat' THEN
+    UPDATE Hard_books SET status = 'MatSach' WHERE id = v_book;
+  ELSE
+    UPDATE Hard_books SET status = 'SanSang' WHERE id = v_book;
+  END IF;
 
   -- 3. Tinh so ngay qua han (overdue_days = returned_at - due_at)
   SET v_late = DATEDIFF(DATE(NEW.returned_at), DATE(v_due));
@@ -117,12 +121,9 @@ BEGIN
 
   -- C. Tra sach bi hong (Damaged):
   -- Khong tu dong tao khoan phat; nhan vien kiem tra va tu quyet dinh muc phat sau
-  ELSEIF NEW.return_condition = 'Hong' THEN
-    -- Khong tu dong tao khoan phat, cho nhan vien danh gia
-
   -- A. Tra sach qua han (Late):
   -- fine = 10% * Sources.price * so ngay qua han (chi khi qua han > 0)
-  ELSEIF v_late > 0 THEN
+  ELSEIF NEW.return_condition <> 'Hong' AND v_late > 0 THEN
     INSERT INTO Fines(return_record_id, fine_type, amount, reason, late_amount, damaged_amount, assessed_by)
     VALUES (NEW.id, 'Late', ROUND(0.10 * v_price * v_late, 2), CONCAT('Tra sach qua han ', v_late, ' ngay'), ROUND(0.10 * v_price * v_late, 2), NULL, NULL);
   END IF;

@@ -27,7 +27,7 @@ class ReturnService:
           2. Ngày trả thực tế phải >= ngày mượn.
           3. Tình trạng sách phải thuộc: 'Tot', 'Hong', 'Mat'.
           4. Khi lưu phiếu trả:
-             - Trigger MySQL `trg_returns_after` tự động chuyển sách về 'SanSang'.
+             - Trigger MySQL `trg_returns_after` chuyển sách mất sang 'MatSach', các sách khác về 'SanSang'.
              - Trigger tự động tính và tạo khoản phạt (Lost = 100% giá bìa; Late = 10% * giá bìa * số ngày trễ).
              - Backend tuyệt đối KHÔNG tự tính thêm tiền phạt để tránh trùng lặp.
           5. Trả về cả phiếu trả và khoản phạt tự động (nếu có).
@@ -76,7 +76,7 @@ class ReturnService:
         # Cập nhật trạng thái sách (đồng bộ với trigger)
         book = db.get(HardBook, loan.hard_book_id)
         if book:
-            book.status = "SanSang"
+            book.status = "MatSach" if return_condition == "Mat" else "SanSang"
 
         db.commit()
         db.refresh(return_record)

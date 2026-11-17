@@ -1,24 +1,26 @@
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.models.branch import Branch
 from app.repositories.base import CRUDBase
-from app.schemas.branch import BranchCreate, BranchUpdate, BranchResponse
+from app.schemas.branch import BranchCreate, BranchListResponse, BranchUpdate, BranchResponse
 
 router = APIRouter(prefix="/branches", tags=["Branches (Chi nhánh thư viện)"])
 branch_repo = CRUDBase[Branch, BranchCreate, BranchUpdate](Branch)
 
 
-@router.get("", response_model=List[BranchResponse])
+@router.get("", response_model=BranchListResponse)
 def get_branches(
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100)
 ):
     """Lấy danh sách các chi nhánh thư viện."""
-    return branch_repo.get_multi(db, skip=skip, limit=limit)
+    items = branch_repo.get_multi(db, skip=skip, limit=limit)
+    total = db.scalar(select(func.count()).select_from(Branch)) or 0
+    return {"items": items, "total": total}
 
 
 @router.get("/{id}", response_model=BranchResponse)

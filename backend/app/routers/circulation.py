@@ -1,3 +1,4 @@
+import datetime as dt
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import text
@@ -89,18 +90,123 @@ def cancel_reservation(id: int, db: Session = Depends(get_db)):
 def get_active_loans(
     db: Session = Depends(get_db),
     reader_id: Optional[int] = Query(None, description="Lọc theo độc giả"),
+    branch_id: Optional[int] = Query(None, description="Lọc theo chi nhánh"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100)
 ):
     """Truy vấn danh sách các lượt mượn đang active (chưa trả) thông qua View `v_active_loans`."""
-    sql = "SELECT id, reader_id, hard_book_id, borrowed_at, due_at FROM v_active_loans"
+    from_sql = (
+        " FROM v_active_loans al "
+        "JOIN Hard_books hb ON hb.id = al.hard_book_id "
+        "JOIN Sources s ON s.id = hb.source_id "
+        "JOIN Branches b ON b.id = hb.branch_id"
+    )
+    conditions = []
     params = {}
-    if reader_id:
-        sql += " WHERE reader_id = :reader_id"
+    if reader_id is not None:
+        conditions.append("al.reader_id = :reader_id")
         params["reader_id"] = reader_id
-    sql += " ORDER BY borrowed_at DESC LIMIT :limit OFFSET :skip"
+    if branch_id is not None:
+        conditions.append("hb.branch_id = :branch_id")
+        params["branch_id"] = branch_id
+    where_sql = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+    total = db.execute(
+        text("SELECT COUNT(*)" + from_sql + where_sql), params
+    ).scalar_one()
+    sql = (
+        "SELECT al.id, al.reader_id, al.hard_book_id, al.borrowed_at, al.due_at, "
+        "hb.branch_id, b.name AS branch_name, s.title AS source_title, "
+        "(SELECT COUNT(*) FROM Renewals r WHERE r.loan_id = al.id) AS renewals_count"
+        + from_sql
+        + where_sql
+        + " ORDER BY al.borrowed_at DESC LIMIT :limit OFFSET :skip"
+    )
     params["limit"] = limit
     params["skip"] = skip
 
     results = db.execute(text(sql), params).mappings().all()
-    return [dict(row) for row in results]
+    return {"items": [dict(row) for row in results], "total": total}
+
+
+@router.get("/history")
+def get_loan_history(
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(..., ge=2000, le=2100),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Lấy lịch sử mượn trong tháng cùng thống kê tính trên toàn bộ tháng."""
+    start = dt.datetime(year, month, 1)
+    end = dt.datetime(year + (month == 12), month % 12 + 1, 1)
+    date_filter = "l.borrowed_at >= :start AND l.borrowed_at < :end"
+    params = {"start": start, "end": end}
+
+    totals = db.execute(
+        text(
+            "SELECT COUNT(*) AS total_loans, "
+            "COUNT(DISTINCT l.reader_id) AS member_count, "
+            "SUM(CASE WHEN rr.id IS NOT NULL THEN 1 ELSE 0 END) AS returned_loans "
+            "FROM Loans l LEFT JOIN Return_records rr ON rr.loan_id = l.id "
+            f"WHERE {date_filter}"
+        ),
+        params,
+    ).mappings().one()
+
+    total = int(totals["total_loans"] or 0)
+    rows = db.execute(
+        text(
+            "SELECT l.id, l.reader_id, r.full_name AS reader_name, "
+            "l.hard_book_id, s.title, l.borrowed_at, l.due_at, "
+            "rr.returned_at, "
+            "CASE WHEN rr.id IS NULL THEN 'Đang mượn' ELSE 'Đã trả' END AS status "
+            "FROM Loans l "
+            "JOIN Readers r ON r.id = l.reader_id "
+            "JOIN Hard_books hb ON hb.id = l.hard_book_id "
+            "JOIN Sources s ON s.id = hb.source_id "
+            "LEFT JOIN Return_records rr ON rr.loan_id = l.id "
+            f"WHERE {date_filter} "
+            "ORDER BY l.borrowed_at DESC, l.id DESC "
+            "LIMIT :limit OFFSET :skip"
+        ),
+        {**params, "limit": limit, "skip": skip},
+    ).mappings().all()
+
+    top_readers = db.execute(
+        text(
+            "SELECT r.id AS reader_id, r.full_name AS reader_name, "
+            "COUNT(*) AS loan_count "
+            "FROM Loans l JOIN Readers r ON r.id = l.reader_id "
+            f"WHERE {date_filter} "
+            "GROUP BY r.id, r.full_name "
+            "ORDER BY loan_count DESC, r.full_name ASC "
+            "LIMIT 5"
+        ),
+        params,
+    ).mappings().all()
+    top_books = db.execute(
+        text(
+            "SELECT s.id AS source_id, s.title, COUNT(*) AS loan_count "
+            "FROM Loans l "
+            "JOIN Hard_books hb ON hb.id = l.hard_book_id "
+            "JOIN Sources s ON s.id = hb.source_id "
+            f"WHERE {date_filter} "
+            "GROUP BY s.id, s.title "
+            "ORDER BY loan_count DESC, s.title ASC "
+            "LIMIT 5"
+        ),
+        params,
+    ).mappings().all()
+
+    return {
+        "items": [dict(row) for row in rows],
+        "total": total,
+        "stats": {
+            "total_loans": total,
+            "member_count": int(totals["member_count"] or 0),
+            "returned_loans": int(totals["returned_loans"] or 0),
+            "active_loans": total - int(totals["returned_loans"] or 0),
+            "top_readers": [dict(row) for row in top_readers],
+            "top_books": [dict(row) for row in top_books],
+        },
+    }

@@ -7,8 +7,11 @@ if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 from app.main import app as fastapi_app, root, list_mapped_tables
 from app.database.base import Base
+from app.database.connection import get_db
 import app.models  # Đăng ký toàn bộ models
 
 
@@ -64,6 +67,12 @@ def test_sources_model_structure():
     assert not table.columns["author"].nullable
 
 
+def test_readers_phone_column_is_optional():
+    table = Base.metadata.tables["Readers"]
+    assert "phone" in table.columns
+    assert table.columns["phone"].nullable
+
+
 def test_fines_model_structure():
     """Kiểm tra model Fines có assessed_by, return_record_id unique và các constraints."""
     table = Base.metadata.tables["Fines"]
@@ -108,3 +117,51 @@ def test_meta_tables_api_handler():
     assert "Hard_books" in result["tables"]
     assert "Return_records" in result["tables"]
     assert "Fines" in result["tables"]
+
+
+def test_database_disconnect_returns_cors_compatible_error():
+    def broken_db():
+        raise OperationalError(
+            "SELECT 1",
+            {},
+            OSError("connection reset"),
+            connection_invalidated=True,
+        )
+        yield
+
+    fastapi_app.dependency_overrides[get_db] = broken_db
+    try:
+        response = TestClient(fastapi_app, raise_server_exceptions=False).post(
+            "/api/v1/circulation/renew",
+            json={"loan_id": 1},
+            headers={"Origin": "http://localhost:3000"},
+        )
+    finally:
+        fastapi_app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 503
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "Kết nối cơ sở dữ liệu bị gián đoạn" in response.json()["detail"]
+
+
+def test_check_constraint_failure_is_not_reported_as_disconnect():
+    def broken_db():
+        raise OperationalError(
+            "UPDATE Hard_books SET status = 'MatSach'",
+            {},
+            Exception(3819, "Check constraint is violated"),
+        )
+        yield
+
+    fastapi_app.dependency_overrides[get_db] = broken_db
+    try:
+        response = TestClient(fastapi_app, raise_server_exceptions=False).post(
+            "/api/v1/circulation/renew",
+            json={"loan_id": 1},
+        )
+    finally:
+        fastapi_app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 500
+    assert "migration_lost_hard_book_status.sql" in response.json()["detail"]
+    assert "ràng buộc CHECK" in response.json()["detail"]

@@ -2,53 +2,60 @@
  * ebooks.js — Ebook catalog and access log management
  */
 import * as api from './api.js';
-import { toast, fmtDate, fmtDateTime, buildTable, handleApiError, openModal, closeModal, getFormData, renderPagination } from './utils.js';
+import { toast, fmtDateTime, fmtMoney, buildTable, eyeIconMarkup, handleApiError, openModal, closeModal, getFormData, renderPagination, debounce, confirmDialog, setButtonLoading } from './utils.js';
 
 let currentPage = 1;
 const PAGE_SIZE = 15;
+let currentEditEbook = null;
 
 export async function renderEbooks(container) {
   container.innerHTML = `
     <div class="page-header">
-      <h1>💻 Sách điện tử</h1>
-      <button class="btn btn-primary" id="btn-add-ebook">+ Thêm Ebook</button>
-      <button class="btn btn-secondary" id="btn-access-logs">📊 Lịch sử truy cập</button>
+      <h1>Sách điện tử</h1>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" id="btn-add-ebook">Thêm sách điện tử</button>
+        <button class="btn btn-secondary" id="btn-access-logs">Lịch sử truy cập</button>
+      </div>
     </div>
     <div class="filter-bar">
-      <input type="text" id="ebook-search" placeholder="Tìm theo tên, URL…" class="form-control" style="max-width:320px">
-      <button class="btn btn-secondary" id="btn-ebook-search">🔍 Tìm</button>
-      <button class="btn btn-ghost" id="btn-ebook-clear">✕</button>
+      <input type="text" id="ebook-search" placeholder="Tìm theo tên sách, tác giả…" class="form-control" style="max-width:320px">
+      <button class="btn btn-secondary" id="btn-ebook-search">Tìm</button>
+      <button class="btn btn-ghost" id="btn-ebook-clear">Xóa bộ lọc</button>
     </div>
     <div id="ebooks-table-wrap"></div>
     <div class="pagination" id="ebooks-pagination"></div>
+
+    <!-- Ebook Detail Modal -->
+    <div class="modal" id="modal-ebook-detail">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 id="ebook-detail-title">Chi tiết sách điện tử</h2>
+          <button class="modal-close" data-close="modal-ebook-detail">✕</button>
+        </div>
+        <div class="modal-body" id="ebook-detail-body">Đang tải…</div>
+        <div class="modal-footer">
+          <button class="btn btn-edit" id="btn-edit-ebook-from-detail">Sửa</button>
+          <button class="btn btn-secondary" data-close="modal-ebook-detail">Đóng</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Ebook Form Modal -->
     <div class="modal" id="modal-ebook-form">
       <div class="modal-box">
         <div class="modal-header">
-          <h2 id="ebook-form-title">Thêm Ebook</h2>
+          <h2 id="ebook-form-title">Thêm sách điện tử</h2>
           <button class="modal-close" data-close="modal-ebook-form">✕</button>
         </div>
         <form id="ebook-form" class="modal-body">
-          <input type="hidden" name="ebook_id">
-          <div class="form-group"><label>Đầu sách (source_id) *</label><input type="text" name="source_id" required class="form-control"></div>
-          <div class="form-group"><label>URL/Đường dẫn *</label><input type="url" name="file_url" required class="form-control" placeholder="https://…"></div>
-          <div class="form-row">
-            <div class="form-group"><label>Định dạng</label>
-              <select name="format" class="form-control">
-                <option value="PDF">PDF</option>
-                <option value="EPUB">EPUB</option>
-                <option value="MOBI">MOBI</option>
-                <option value="HTML">HTML</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Dung lượng (MB)</label><input type="number" name="file_size_mb" class="form-control" min="0" step="0.1"></div>
-          </div>
-          <div class="form-group"><label>Giới hạn lượt xem đồng thời</label><input type="number" name="max_concurrent" class="form-control" value="5" min="1"></div>
+          <input type="hidden" name="id">
+          <div class="form-group"><label>Mã đầu sách *</label><input type="number" name="source_id" required class="form-control" min="1" step="1"></div>
+          <div class="form-group"><label>Dung lượng (MB)</label><input type="number" name="file_size_mb" class="form-control" min="1" step="1"></div>
         </form>
         <div class="modal-footer">
           <button class="btn btn-primary" id="btn-submit-ebook">Lưu</button>
-          <button class="btn btn-secondary" data-close="modal-ebook-form">Huỷ</button>
+          <button class="btn btn-delete" id="btn-delete-ebook-from-form" style="display:none">Xóa</button>
+          <button class="btn btn-secondary" data-close="modal-ebook-form">Hủy</button>
         </div>
       </div>
     </div>
@@ -57,16 +64,16 @@ export async function renderEbooks(container) {
     <div class="modal" id="modal-start-access">
       <div class="modal-box">
         <div class="modal-header">
-          <h2>🔓 Bắt đầu đọc Ebook</h2>
+          <h2>Bắt đầu đọc sách điện tử</h2>
           <button class="modal-close" data-close="modal-start-access">✕</button>
         </div>
         <form id="access-form" class="modal-body">
-          <div class="form-group"><label>Mã độc giả *</label><input type="text" name="reader_id" required class="form-control"></div>
-          <div class="form-group"><label>Mã Ebook *</label><input type="text" name="ebook_id" required class="form-control" id="access-ebook-id"></div>
+          <div class="form-group"><label>Mã hội viên *</label><input type="text" name="reader_id" required class="form-control"></div>
+          <div class="form-group"><label>Mã sách điện tử *</label><input type="text" name="ebook_id" required class="form-control" id="access-ebook-id"></div>
         </form>
         <div class="modal-footer">
-          <button class="btn btn-primary" id="btn-submit-access">▶ Bắt đầu</button>
-          <button class="btn btn-secondary" data-close="modal-start-access">Huỷ</button>
+          <button class="btn btn-primary" id="btn-submit-access">Bắt đầu</button>
+          <button class="btn btn-secondary" data-close="modal-start-access">Hủy</button>
         </div>
       </div>
     </div>
@@ -75,7 +82,7 @@ export async function renderEbooks(container) {
     <div class="modal" id="modal-access-logs">
       <div class="modal-box modal-lg">
         <div class="modal-header">
-          <h2>📊 Lịch sử truy cập Ebook</h2>
+          <h2>Lịch sử truy cập sách điện tử</h2>
           <button class="modal-close" data-close="modal-access-logs">✕</button>
         </div>
         <div class="modal-body" id="access-logs-body">Đang tải…</div>
@@ -92,6 +99,7 @@ export async function renderEbooks(container) {
   document.getElementById('btn-ebook-clear').addEventListener('click', clearSearch);
   document.getElementById('ebook-search').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
   document.getElementById('btn-submit-ebook').addEventListener('click', submitEbookForm);
+  document.getElementById('btn-delete-ebook-from-form').addEventListener('click', deleteCurrentEbook);
   document.getElementById('btn-submit-access').addEventListener('click', submitStartAccess);
   document.getElementById('btn-access-logs').addEventListener('click', openAccessLogs);
 
@@ -118,18 +126,16 @@ async function loadEbooks() {
     const total = data?.total ?? items.length;
     buildTable(wrap,
       [
-        { key: 'ebook_id',    label: 'Mã Ebook' },
-        { key: 'source_id',   label: 'Đầu sách' },
-        { key: 'format',      label: 'Định dạng' },
-        { key: 'file_size_mb', label: 'Dung lượng', render: v => v ? `${v} MB` : '—' },
-        { key: 'max_concurrent', label: 'Tối đa đồng thời' },
-        { key: 'file_url',    label: 'URL', render: v => v ? `<a href="${v}" target="_blank" class="link">🔗 Mở</a>` : '—' },
+        { key: 'id',          label: 'Mã Ebook' },
+        { key: 'source',      label: 'Tên sách', render: source => source?.title ?? '—' },
+        { key: 'source',      label: 'Số trang', render: source => source?.page_count ?? '—' },
+        { key: 'file_size_mb', label: 'Dung lượng', render: v => v != null ? `${v} MB` : '—' },
       ],
       items,
       row => [
-        { label: '▶ Đọc',   cls: 'btn-primary', onClick: r => openStartAccess(r.ebook_id) },
-        { label: '✏ Sửa',  cls: 'btn-warning',  onClick: r => openEbookForm(r) },
-        { label: '🗑 Xoá',  cls: 'btn-danger',   onClick: r => deleteEbook(r) },
+        { html: eyeIconMarkup(), ariaLabel: 'Chi tiết sách điện tử', title: 'Chi tiết', cls: 'btn-icon', onClick: r => openEbookDetail(r.id) },
+        { label: 'Đọc', cls: 'btn-secondary', onClick: r => openStartAccess(r.id) },
+        { label: 'Sửa', cls: 'btn-edit', onClick: r => openEbookForm(r) },
       ]
     );
     renderPagination(document.getElementById('ebooks-pagination'), currentPage, Math.ceil(total / PAGE_SIZE),
@@ -139,10 +145,39 @@ async function loadEbooks() {
   }
 }
 
+async function openEbookDetail(id) {
+  openModal('modal-ebook-detail');
+  const body = document.getElementById('ebook-detail-body');
+  body.textContent = 'Đang tải…';
+  try {
+    const ebook = await api.getEbook(id);
+    currentEditEbook = ebook;
+    document.getElementById('ebook-detail-title').textContent = ebook.source?.title || `Sách điện tử #${ebook.id}`;
+    body.innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-item"><span class="detail-label">Mã sách điện tử</span><span>${ebook.id}</span></div>
+        <div class="detail-item"><span class="detail-label">Tên sách</span><span>${ebook.source?.title || '—'}</span></div>
+        <div class="detail-item"><span class="detail-label">Tác giả</span><span>${ebook.source?.author || '—'}</span></div>
+        <div class="detail-item"><span class="detail-label">Số trang</span><span>${ebook.source?.page_count ?? '—'}</span></div>
+        <div class="detail-item"><span class="detail-label">Dung lượng</span><span>${ebook.file_size_mb != null ? `${ebook.file_size_mb} MB` : '—'}</span></div>
+        <div class="detail-item"><span class="detail-label">Giá bìa</span><span>${ebook.source?.price != null ? fmtMoney(ebook.source.price) : '—'}</span></div>
+      </div>`;
+    document.getElementById('btn-edit-ebook-from-detail').onclick = () => {
+      closeModal('modal-ebook-detail');
+      openEbookForm(ebook);
+    };
+  } catch (err) {
+    body.innerHTML = `<p class="text-danger">Không tải được chi tiết: ${err.detail || err.message}</p>`;
+  }
+}
+
 function openEbookForm(ebook) {
   const form = document.getElementById('ebook-form');
   form.reset();
-  document.getElementById('ebook-form-title').textContent = ebook ? 'Sửa Ebook' : 'Thêm Ebook';
+  form.elements['source_id'].readOnly = Boolean(ebook);
+  currentEditEbook = ebook || null;
+  document.getElementById('btn-delete-ebook-from-form').style.display = ebook ? 'inline-flex' : 'none';
+  document.getElementById('ebook-form-title').textContent = ebook ? 'Sửa sách điện tử' : 'Thêm sách điện tử';
   if (ebook) {
     Object.entries(ebook).forEach(([k, v]) => {
       const el = form.elements[k];
@@ -154,23 +189,36 @@ function openEbookForm(ebook) {
 
 async function submitEbookForm() {
   const form = document.getElementById('ebook-form');
+  const btn = document.getElementById('btn-submit-ebook');
   if (!form.checkValidity()) { form.reportValidity(); return; }
   const data = getFormData(form);
-  const id = data.ebook_id;
-  delete data.ebook_id;
-  if (data.file_size_mb) data.file_size_mb = parseFloat(data.file_size_mb);
-  if (data.max_concurrent) data.max_concurrent = parseInt(data.max_concurrent);
+  const id = data.id;
+  delete data.id;
+  data.source_id = parseInt(data.source_id, 10);
+  if (data.file_size_mb) data.file_size_mb = parseInt(data.file_size_mb, 10);
+  setButtonLoading(btn, true);
   try {
-    if (id) { await api.updateEbook(id, data); toast('Cập nhật ebook thành công!', 'success'); }
-    else { await api.createEbook(data); toast('Thêm ebook thành công!', 'success'); }
+    if (id) { await api.updateEbook(id, data); toast('Cập nhật sách điện tử thành công!', 'success'); }
+    else { await api.createEbook(data); toast('Thêm sách điện tử thành công!', 'success'); }
     closeModal('modal-ebook-form');
+    currentEditEbook = null;
     loadEbooks();
   } catch (err) { handleApiError(err); }
+  finally { setButtonLoading(btn, false); }
 }
 
-async function deleteEbook(e) {
-  if (!confirm(`Xoá ebook #${e.ebook_id}?`)) return;
-  try { await api.deleteEbook(e.ebook_id); toast('Đã xoá ebook.', 'success'); loadEbooks(); }
+async function deleteCurrentEbook() {
+  const ebook = currentEditEbook;
+  if (!ebook) return;
+  const confirmed = await confirmDialog(`Xóa sách điện tử #<b>${ebook.id}</b>?`);
+  if (!confirmed) return;
+  try {
+    await api.deleteEbook(ebook.id);
+    toast('Đã xóa sách điện tử.', 'success');
+    closeModal('modal-ebook-form');
+    currentEditEbook = null;
+    loadEbooks();
+  }
   catch (err) { handleApiError(err); }
 }
 
@@ -189,7 +237,7 @@ async function submitStartAccess() {
   };
   try {
     const res = await api.startAccess(data);
-    toast(`Bắt đầu đọc! Mã log: ${res.log_id}`, 'success');
+    toast(`Bắt đầu đọc! Mã log: ${res.id}`, 'success');
     closeModal('modal-start-access');
   } catch (err) { handleApiError(err); }
 }
@@ -203,14 +251,14 @@ async function openAccessLogs() {
     const items = data?.items ?? data ?? [];
     if (!items.length) { body.innerHTML = '<p class="empty-state">Không có lịch sử truy cập.</p>'; return; }
     body.innerHTML = `<table class="data-table">
-      <thead><tr><th>Mã log</th><th>Ebook</th><th>Độc giả</th><th>Bắt đầu</th><th>Kết thúc</th><th>Thao tác</th></tr></thead>
+      <thead><tr><th>Mã log</th><th>Sách điện tử</th><th>Mã hội viên</th><th>Bắt đầu</th><th>Kết thúc</th><th>Thao tác</th></tr></thead>
       <tbody>${items.map(l => `<tr>
-        <td>${l.log_id}</td>
+        <td>${l.id}</td>
         <td>${l.ebook_id}</td>
         <td>${l.reader_id}</td>
-        <td>${fmtDateTime(l.start_time)}</td>
-        <td>${fmtDateTime(l.end_time)}</td>
-        <td>${!l.end_time ? `<button class="btn btn-sm btn-warning" onclick="endAccessLog(${l.log_id})">■ Kết thúc</button>` : '—'}</td>
+        <td>${fmtDateTime(l.started_at)}</td>
+        <td>${fmtDateTime(l.ended_at)}</td>
+        <td>${!l.ended_at ? `<button class="btn btn-sm btn-secondary" onclick="endAccessLog(${l.id})">Kết thúc</button>` : '—'}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (err) { body.innerHTML = `<p class="text-danger">${err.detail}</p>`; }
 }

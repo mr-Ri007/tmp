@@ -60,6 +60,7 @@ class ReservationService:
             status="ChoNhan"
         )
         db.add(reservation)
+        db.flush()
 
         # Chuyển sách sang DangCho
         book.status = "DangCho"

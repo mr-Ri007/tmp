@@ -32,8 +32,9 @@ CREATE TABLE Hard_books (
   id INT AUTO_INCREMENT PRIMARY KEY,                -- Mã bản sao (mã vạch)
   source_id INT NOT NULL,                           -- Thuộc tài liệu nào
   branch_id INT NOT NULL,                           -- Đang đặt tại chi nhánh nào
-  status VARCHAR(10) NOT NULL DEFAULT 'SanSang'     -- Trạng thái: SanSang / DangCho (giữ cho người đặt trước) / DangMuon
-    CHECK (status IN ('SanSang','DangCho','DangMuon')),
+  status VARCHAR(10) NOT NULL DEFAULT 'SanSang',    -- Trạng thái: SanSang / DangCho / DangMuon / MatSach
+  CONSTRAINT chk_hard_books_status
+    CHECK (status IN ('SanSang','DangCho','DangMuon','MatSach')),
   FOREIGN KEY (source_id) REFERENCES Sources(id) ON DELETE RESTRICT,
   FOREIGN KEY (branch_id) REFERENCES Branches(id) ON DELETE RESTRICT
 );
@@ -52,6 +53,7 @@ CREATE TABLE Readers (
   full_name VARCHAR(100) NOT NULL,                  -- Họ và tên
   date_of_birth DATE NOT NULL,                      -- Ngày sinh (trigger kiểm tra phải đủ 16 tuổi)
   email VARCHAR(100) NOT NULL UNIQUE,               -- Email (không trùng)
+  phone VARCHAR(20),                                -- Số điện thoại (có thể để trống)
   national_id VARCHAR(12) UNIQUE,                   -- Số CCCD (không trùng, có thể để trống)
   reader_type VARCHAR(20) NOT NULL                  -- Hạng độc giả: Sinh vien / Giang vien / Nghien cuu sinh
     CHECK (reader_type IN ('Sinh vien','Giang vien','Nghien cuu sinh'))

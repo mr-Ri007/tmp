@@ -18,6 +18,7 @@ class Reader(Base):
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     date_of_birth: Mapped[dt.date] = mapped_column(Date, nullable=False)
     email: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     national_id: Mapped[Optional[str]] = mapped_column(String(12), nullable=True, unique=True)
     reader_type: Mapped[str] = mapped_column(
         String(20),

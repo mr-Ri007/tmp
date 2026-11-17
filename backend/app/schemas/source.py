@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -29,3 +29,8 @@ class SourceResponse(SourceBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SourceListResponse(BaseModel):
+    items: List[SourceResponse]
+    total: int

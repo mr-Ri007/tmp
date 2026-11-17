@@ -133,17 +133,23 @@ FROM Fines WHERE return_record_id = 99003
 UNION ALL
 
 SELECT 
-  'TC4: 200k mat sach -> phat 200k' AS test_case,
-  CASE WHEN COUNT(*) = 1 AND SUM(amount) = 200000.00 AND MAX(fine_type) = 'Lost' THEN 'PASS' ELSE 'FAIL' END AS status,
-  CONCAT('Loai: ', MAX(fine_type), ', So tien: ', COALESCE(SUM(amount), 0)) AS detail
+  'TC4: 200k mat sach -> phat 200k, ban sao MatSach' AS test_case,
+  CASE WHEN COUNT(*) = 1 AND SUM(amount) = 200000.00 AND MAX(fine_type) = 'Lost'
+        AND (SELECT status FROM Hard_books WHERE id = 99004) = 'MatSach'
+       THEN 'PASS' ELSE 'FAIL' END AS status,
+  CONCAT('Loai: ', MAX(fine_type), ', So tien: ', COALESCE(SUM(amount), 0),
+         ', Trang thai: ', (SELECT status FROM Hard_books WHERE id = 99004)) AS detail
 FROM Fines WHERE return_record_id = 99004
 
 UNION ALL
 
 SELECT 
-  'TC5: 200k tre 3 ngay roi mat -> chi phat 200k' AS test_case,
-  CASE WHEN COUNT(*) = 1 AND SUM(amount) = 200000.00 AND MAX(fine_type) = 'Lost' THEN 'PASS' ELSE 'FAIL' END AS status,
-  CONCAT('Loai: ', MAX(fine_type), ', So tien: ', COALESCE(SUM(amount), 0)) AS detail
+  'TC5: 200k tre 3 ngay roi mat -> chi phat 200k, ban sao MatSach' AS test_case,
+  CASE WHEN COUNT(*) = 1 AND SUM(amount) = 200000.00 AND MAX(fine_type) = 'Lost'
+        AND (SELECT status FROM Hard_books WHERE id = 99005) = 'MatSach'
+       THEN 'PASS' ELSE 'FAIL' END AS status,
+  CONCAT('Loai: ', MAX(fine_type), ', So tien: ', COALESCE(SUM(amount), 0),
+         ', Trang thai: ', (SELECT status FROM Hard_books WHERE id = 99005)) AS detail
 FROM Fines WHERE return_record_id = 99005
 
 UNION ALL

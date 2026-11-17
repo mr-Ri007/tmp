@@ -7,7 +7,7 @@ from app.schemas.source import SourceResponse
 class HardBookBase(BaseModel):
     source_id: int = Field(..., gt=0, description="Mã tài liệu")
     branch_id: int = Field(..., gt=0, description="Mã chi nhánh")
-    status: Literal["SanSang", "DangCho", "DangMuon"] = Field(
+    status: Literal["SanSang", "DangCho", "DangMuon", "MatSach"] = Field(
         default="SanSang",
         description="Trạng thái bản sao vật lý"
     )
@@ -19,7 +19,7 @@ class HardBookCreate(HardBookBase):
 
 class HardBookUpdate(BaseModel):
     branch_id: Optional[int] = Field(None, gt=0)
-    status: Optional[Literal["SanSang", "DangCho", "DangMuon"]] = None
+    status: Optional[Literal["SanSang", "DangCho", "DangMuon", "MatSach"]] = None
 
 
 class HardBookResponse(HardBookBase):
@@ -31,3 +31,8 @@ class HardBookResponse(HardBookBase):
 class HardBookDetailResponse(HardBookResponse):
     source: Optional[SourceResponse] = None
     branch: Optional[BranchResponse] = None
+
+
+class HardBookListResponse(BaseModel):
+    items: list[HardBookDetailResponse]
+    total: int

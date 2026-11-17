@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -20,3 +20,8 @@ class BranchResponse(BranchBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BranchListResponse(BaseModel):
+    items: List[BranchResponse]
+    total: int

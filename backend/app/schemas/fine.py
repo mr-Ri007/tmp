@@ -1,6 +1,6 @@
 import datetime as dt
 from decimal import Decimal
-from typing import Optional, Literal
+from typing import List, Optional, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -28,3 +28,8 @@ class FineResponse(BaseModel):
     paid_at: Optional[dt.datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FinePageResponse(BaseModel):
+    items: List[FineResponse]
+    total: int

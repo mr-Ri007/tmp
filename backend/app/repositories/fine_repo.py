@@ -8,6 +8,27 @@ from app.models.loan import Loan
 
 
 class CRUDFine:
+    def get_count(
+        self,
+        db: Session,
+        *,
+        reader_id: Optional[int] = None,
+        unpaid_only: bool = False,
+        fine_type: Optional[str] = None,
+    ) -> int:
+        stmt = (
+            select(func.count(Fine.id))
+            .join(ReturnRecord, ReturnRecord.id == Fine.return_record_id)
+            .join(Loan, Loan.id == ReturnRecord.loan_id)
+        )
+        if reader_id is not None:
+            stmt = stmt.where(Loan.reader_id == reader_id)
+        if unpaid_only:
+            stmt = stmt.where(Fine.paid_at.is_(None))
+        if fine_type:
+            stmt = stmt.where(Fine.fine_type == fine_type)
+        return int(db.scalar(stmt) or 0)
+
     def get(self, db: Session, fine_id: int) -> Optional[Fine]:
         return db.get(Fine, fine_id)
 

@@ -29,11 +29,11 @@ class HardBook(Base):
         String(10),
         nullable=False,
         default="SanSang",
-        comment="Trạng thái: SanSang / DangCho / DangMuon"
+        comment="Trạng thái: SanSang / DangCho / DangMuon / MatSach"
     )
 
     __table_args__ = (
-        CheckConstraint("status IN ('SanSang','DangCho','DangMuon')", name="chk_hard_books_status"),
+        CheckConstraint("status IN ('SanSang','DangCho','DangMuon','MatSach')", name="chk_hard_books_status"),
     )
 
     # Quan hệ N-1: Thuộc về đầu sách nào

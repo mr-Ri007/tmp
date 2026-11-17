@@ -10,16 +10,18 @@ import { renderCirculation } from './circulation.js';
 import { renderFines } from './fines.js';
 import { renderBranches } from './branches.js';
 import { renderEbooks } from './ebooks.js';
+import { renderHistory } from './history.js';
 
 // ── Route table ───────────────────────────────────────────────────────────────
 const ROUTES = {
-  dashboard:   { label: '🏠 Tổng quan',       render: renderDashboard },
-  sources:     { label: '📚 Danh mục sách',    render: renderSources },
-  ebooks:      { label: '💻 Sách điện tử',     render: renderEbooks },
-  readers:     { label: '👤 Bạn đọc',          render: renderReaders },
-  circulation: { label: '🔄 Mượn / Trả',       render: renderCirculation },
-  fines:       { label: '💸 Tiền phạt',         render: renderFines },
-  branches:    { label: '🏢 Chi nhánh',         render: renderBranches },
+  dashboard:   { label: 'Tổng quan',          render: renderDashboard },
+  sources:     { label: 'Danh mục sách',      render: renderSources },
+  ebooks:      { label: 'Sách điện tử',        render: renderEbooks },
+  readers:     { label: 'Hội viên',            render: renderReaders },
+  circulation: { label: 'Mượn / Trả',          render: renderCirculation },
+  fines:       { label: 'Tiền phạt',           render: renderFines },
+  branches:    { label: 'Chi nhánh',           render: renderBranches },
+  history:     { label: 'Lịch sử mượn tháng', render: renderHistory },
 };
 
 let currentPage = null;
@@ -71,14 +73,38 @@ async function checkBackend() {
 function setupSidebar() {
   const toggle = document.getElementById('sidebar-toggle');
   const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
   if (toggle) {
-    toggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+    toggle.addEventListener('click', () => {
+      const isOpen = sidebar.classList.toggle('open');
+      overlay.classList.toggle('visible', isOpen);
+    });
+  }
+  if (overlay) {
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('visible');
+    });
   }
   // Close on nav click (mobile)
   document.querySelectorAll('.nav-link').forEach(a => {
-    a.addEventListener('click', () => sidebar.classList.remove('open'));
+    a.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('visible');
+    });
   });
 }
+
+// Close modals on ESC key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal.open').forEach(m => {
+      m.classList.remove('open');
+    });
+    document.getElementById('sidebar')?.classList.remove('open');
+    document.getElementById('sidebar-overlay')?.classList.remove('visible');
+  }
+});
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {

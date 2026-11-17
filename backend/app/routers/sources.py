@@ -1,15 +1,15 @@
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.repositories.source_repo import source_repo
-from app.schemas.source import SourceCreate, SourceUpdate, SourceResponse
+from app.schemas.source import SourceCreate, SourceListResponse, SourceUpdate, SourceResponse
 
 router = APIRouter(prefix="/sources", tags=["Sources (Tài liệu / Đầu sách)"])
 
 
-@router.get("", response_model=List[SourceResponse])
+@router.get("", response_model=SourceListResponse)
 def get_sources(
     db: Session = Depends(get_db),
     query: Optional[str] = Query(None, description="Tìm kiếm theo tên sách hoặc tác giả"),
@@ -18,7 +18,10 @@ def get_sources(
     limit: int = Query(50, ge=1, le=100)
 ):
     """Lấy danh sách đầu sách có hỗ trợ tìm kiếm và phân trang."""
-    return source_repo.search(db, query=query, genre=genre, skip=skip, limit=limit)
+    return {
+        "items": source_repo.search(db, query=query, genre=genre, skip=skip, limit=limit),
+        "total": source_repo.count(db, query=query, genre=genre)
+    }
 
 
 @router.get("/{id}", response_model=SourceResponse)

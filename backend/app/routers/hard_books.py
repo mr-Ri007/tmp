@@ -1,38 +1,47 @@
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.repositories.hard_book_repo import hard_book_repo
-from app.schemas.hard_book import HardBookCreate, HardBookUpdate, HardBookResponse
+from app.schemas.hard_book import (
+    HardBookCreate,
+    HardBookDetailResponse,
+    HardBookListResponse,
+    HardBookResponse,
+    HardBookUpdate,
+)
 
 router = APIRouter(prefix="/hard-books", tags=["Hard Books (Bản sao vật lý)"])
 
 
-@router.get("", response_model=List[HardBookResponse])
+@router.get("", response_model=HardBookListResponse)
 def get_hard_books(
     db: Session = Depends(get_db),
     branch_id: Optional[int] = Query(None, description="Lọc theo chi nhánh"),
     source_id: Optional[int] = Query(None, description="Lọc theo đầu sách"),
-    book_status: Optional[str] = Query(None, alias="status", description="Lọc theo trạng thái (SanSang, DangCho, DangMuon)"),
+    book_status: Optional[str] = Query(None, alias="status", description="Lọc theo trạng thái (SanSang, DangCho, DangMuon, MatSach)"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100)
 ):
     """Lấy danh sách các bản sao sách vật lý."""
-    return hard_book_repo.get_by_branch_and_status(
-        db,
+    filters = dict(
         branch_id=branch_id,
         source_id=source_id,
         status=book_status,
-        skip=skip,
-        limit=limit
     )
+    return {
+        "items": hard_book_repo.get_by_branch_and_status(
+            db, **filters, skip=skip, limit=limit
+        ),
+        "total": hard_book_repo.count_by_branch_and_status(db, **filters),
+    }
 
 
-@router.get("/{id}", response_model=HardBookResponse)
+@router.get("/{id}", response_model=HardBookDetailResponse)
 def get_hard_book(id: int, db: Session = Depends(get_db)):
-    """Lấy thông tin một bản sao sách vật lý theo ID/mã vạch."""
-    book = hard_book_repo.get(db, id)
+    """Lấy thông tin bản sao cùng tên sách và chi nhánh."""
+    book = hard_book_repo.get_detail(db, id)
     if not book:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

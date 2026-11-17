@@ -1,8 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError, InterfaceError
 
 from app.core.config import settings
 from app.database.connection import check_db_connection
@@ -49,6 +50,42 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json"
 )
+
+
+@app.exception_handler(DBAPIError)
+async def handle_database_error(request: Request, exc: DBAPIError):
+    error_args = getattr(exc.orig, "args", ())
+    mysql_error_code = error_args[0] if error_args else None
+    check_constraint_failed = mysql_error_code == 3819
+    logger.error(
+        "Database request failed (%s)",
+        type(exc.orig).__name__,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    unavailable = (
+        exc.connection_invalidated
+        or isinstance(exc, InterfaceError)
+        or mysql_error_code in {2002, 2003, 2006, 2013, 2055}
+    )
+    if check_constraint_failed:
+        detail = (
+            "Cơ sở dữ liệu từ chối dữ liệu do ràng buộc CHECK. "
+            "Hãy xem tên constraint trong log backend; nếu lỗi xảy ra khi trả sách mất, "
+            "chạy lại migration_lost_hard_book_status.sql."
+        )
+    elif unavailable:
+        detail = (
+            "Kết nối cơ sở dữ liệu bị gián đoạn. Hãy kiểm tra trạng thái backend/database "
+            "trước khi thử lại để tránh gửi thao tác ghi trùng."
+        )
+    else:
+        detail = "Thao tác cơ sở dữ liệu thất bại. Vui lòng kiểm tra log backend."
+
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE if unavailable else status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": detail},
+    )
+
 
 # Cấu hình CORS
 if settings.BACKEND_CORS_ORIGINS:

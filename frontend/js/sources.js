@@ -2,7 +2,7 @@
  * sources.js — Book catalog management (Sources + Hard books)
  */
 import * as api from './api.js';
-import { toast, fmtMoney, fmtDate, fmtStatus, buildTable, handleApiError, openModal, closeModal, getFormData, renderPagination } from './utils.js';
+import { toast, fmtMoney, fmtStatus, buildTable, eyeIconMarkup, handleApiError, openModal, closeModal, getFormData, renderPagination, debounce, confirmDialog, setButtonLoading } from './utils.js';
 
 let currentPage = 1;
 const PAGE_SIZE = 15;
@@ -11,14 +11,16 @@ let searchQuery = { query: '', genre: '' };
 export async function renderSources(container) {
   container.innerHTML = `
     <div class="page-header">
-      <h1>📚 Danh mục sách</h1>
-      <button class="btn btn-primary" id="btn-add-source">+ Thêm đầu sách</button>
+      <h1>Danh mục sách</h1>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" id="btn-add-source">Thêm đầu sách</button>
+      </div>
     </div>
     <div class="filter-bar">
-      <input type="text" id="src-search" placeholder="Tìm theo tên, tác giả, ISBN…" class="form-control" style="max-width:320px">
+      <input type="text" id="src-search" placeholder="Tìm theo tên, tác giả…" class="form-control" style="max-width:320px">
       <input type="text" id="src-genre" placeholder="Thể loại" class="form-control" style="max-width:160px">
-      <button class="btn btn-secondary" id="btn-src-search">🔍 Tìm</button>
-      <button class="btn btn-ghost" id="btn-src-clear">✕ Xoá bộ lọc</button>
+      <button class="btn btn-secondary" id="btn-src-search">Tìm</button>
+      <button class="btn btn-ghost" id="btn-src-clear">Xóa bộ lọc</button>
     </div>
     <div id="sources-table-wrap"></div>
     <div class="pagination" id="sources-pagination"></div>
@@ -28,12 +30,11 @@ export async function renderSources(container) {
       <div class="modal-box modal-lg">
         <div class="modal-header">
           <h2 id="modal-source-title">Chi tiết sách</h2>
-          <button class="modal-close" data-close="modal-source-detail">✕</button>
+          <button class="modal-close" data-close="modal-source-detail">X</button>
         </div>
         <div class="modal-body" id="source-detail-body">Đang tải…</div>
         <div class="modal-footer">
-          <button class="btn btn-warning" id="btn-edit-source">✏ Sửa</button>
-          <button class="btn btn-danger"  id="btn-delete-source">🗑 Xoá</button>
+          <button class="btn btn-edit" id="btn-edit-source">Sửa</button>
           <button class="btn btn-secondary" data-close="modal-source-detail">Đóng</button>
         </div>
       </div>
@@ -44,28 +45,25 @@ export async function renderSources(container) {
       <div class="modal-box">
         <div class="modal-header">
           <h2 id="source-form-title">Thêm đầu sách</h2>
-          <button class="modal-close" data-close="modal-source-form">✕</button>
+          <button class="modal-close" data-close="modal-source-form">X</button>
         </div>
         <form id="source-form" class="modal-body">
-          <input type="hidden" name="source_id">
+          <input type="hidden" name="id">
           <div class="form-group"><label>Tiêu đề *</label><input type="text" name="title" required class="form-control"></div>
-          <div class="form-row">
-            <div class="form-group"><label>Tác giả *</label><input type="text" name="author" required class="form-control"></div>
-            <div class="form-group"><label>ISBN</label><input type="text" name="isbn" class="form-control"></div>
-          </div>
+          <div class="form-group"><label>Tác giả *</label><input type="text" name="author" required class="form-control"></div>
           <div class="form-row">
             <div class="form-group"><label>Thể loại</label><input type="text" name="genre" class="form-control"></div>
-            <div class="form-group"><label>Năm xuất bản</label><input type="number" name="publish_year" class="form-control" min="1000" max="2100"></div>
+            <div class="form-group"><label>Nam xuat ban</label><input type="number" name="publication_year" class="form-control" min="1000" max="2100"></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Giá bìa (₫) *</label><input type="number" name="price" required class="form-control" min="0" step="1000"></div>
-            <div class="form-group"><label>Nhà xuất bản</label><input type="text" name="publisher" class="form-control"></div>
+            <div class="form-group"><label>Gia bia (đ) *</label><input type="number" name="price" required class="form-control" min="0" step="1000"></div>
+            <div class="form-group"><label>Số trang</label><input type="number" name="page_count" class="form-control" min="1"></div>
           </div>
-          <div class="form-group"><label>Mô tả</label><textarea name="description" class="form-control" rows="3"></textarea></div>
         </form>
         <div class="modal-footer">
           <button class="btn btn-primary" id="btn-submit-source">Lưu</button>
-          <button class="btn btn-secondary" data-close="modal-source-form">Huỷ</button>
+          <button class="btn btn-delete" id="btn-delete-from-form" style="display:none">Xóa</button>
+          <button class="btn btn-secondary" data-close="modal-source-form">Hủy</button>
         </div>
       </div>
     </div>
@@ -74,8 +72,8 @@ export async function renderSources(container) {
     <div class="modal" id="modal-hard-books">
       <div class="modal-box modal-lg">
         <div class="modal-header">
-          <h2>📗 Bản vật lý của đầu sách</h2>
-          <button class="modal-close" data-close="modal-hard-books">✕</button>
+          <h2>Các chi nhánh có sách</h2>
+          <button class="modal-close" data-close="modal-hard-books">X</button>
         </div>
         <div class="modal-body" id="hard-books-body">Đang tải…</div>
         <div class="modal-footer">
@@ -89,8 +87,12 @@ export async function renderSources(container) {
   document.getElementById('btn-add-source').addEventListener('click', () => openSourceForm(null));
   document.getElementById('btn-src-search').addEventListener('click', doSearch);
   document.getElementById('btn-src-clear').addEventListener('click', clearSearch);
+  const debouncedSearch = debounce(doSearch, 400);
+  document.getElementById('src-search').addEventListener('input', debouncedSearch);
+  document.getElementById('src-genre').addEventListener('input', debouncedSearch);
   document.getElementById('src-search').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
   document.getElementById('btn-submit-source').addEventListener('click', submitSourceForm);
+  document.getElementById('btn-delete-from-form').addEventListener('click', deleteCurrentSource);
 
   await loadSources();
 }
@@ -133,20 +135,19 @@ async function loadSources() {
 
     buildTable(wrap,
       [
-        { key: 'source_id', label: 'ID' },
+        { key: 'id', label: 'ID' },
         { key: 'title',     label: 'Tiêu đề' },
         { key: 'author',    label: 'Tác giả' },
         { key: 'genre',     label: 'Thể loại' },
-        { key: 'publish_year', label: 'Năm' },
+        { key: 'publication_year', label: 'Năm' },
+        { key: 'page_count', label: 'Số trang' },
         { key: 'price',     label: 'Giá bìa', render: v => fmtMoney(v) },
-        { key: 'isbn',      label: 'ISBN' },
       ],
       items,
       row => [
-        { label: '👁 Chi tiết', cls: 'btn-primary', onClick: r => openSourceDetail(r.source_id) },
-        { label: '📗 Bản VL',   cls: 'btn-secondary', onClick: r => openHardBooks(r.source_id, r.title) },
-        { label: '✏ Sửa',      cls: 'btn-warning',  onClick: r => openSourceForm(r) },
-        { label: '🗑 Xoá',      cls: 'btn-danger',   onClick: r => deleteSource(r) },
+        { html: eyeIconMarkup(), ariaLabel: 'Chi tiết', title: 'Chi tiết', cls: 'btn-icon', onClick: r => openSourceDetail(r.id) },
+        { label: 'Chi nhánh', cls: 'btn-secondary', onClick: r => openHardBooks(r.id, r.title) },
+        { label: 'Sửa', cls: 'btn-edit', onClick: r => openSourceForm(r) },
       ]
     );
 
@@ -170,18 +171,15 @@ async function openSourceDetail(id) {
     document.getElementById('modal-source-title').textContent = s.title;
     body.innerHTML = `
       <div class="detail-grid">
-        <div class="detail-item"><span class="detail-label">ID</span><span>${s.source_id}</span></div>
+        <div class="detail-item"><span class="detail-label">ID</span><span>${s.id}</span></div>
         <div class="detail-item"><span class="detail-label">Tác giả</span><span>${s.author}</span></div>
-        <div class="detail-item"><span class="detail-label">ISBN</span><span>${s.isbn || '—'}</span></div>
         <div class="detail-item"><span class="detail-label">Thể loại</span><span>${s.genre || '—'}</span></div>
-        <div class="detail-item"><span class="detail-label">Năm XB</span><span>${s.publish_year || '—'}</span></div>
-        <div class="detail-item"><span class="detail-label">Nhà XB</span><span>${s.publisher || '—'}</span></div>
+        <div class="detail-item"><span class="detail-label">Năm xuất bản</span><span>${s.publication_year || '—'}</span></div>
+        <div class="detail-item"><span class="detail-label">Số trang</span><span>${s.page_count || '—'}</span></div>
         <div class="detail-item"><span class="detail-label">Giá bìa</span><span class="text-primary fw-bold">${fmtMoney(s.price)}</span></div>
       </div>
-      <div class="form-group mt-2"><strong>Mô tả:</strong><p>${s.description || '(Chưa có mô tả)'}</p></div>
     `;
     document.getElementById('btn-edit-source').onclick = () => { closeModal('modal-source-detail'); openSourceForm(s); };
-    document.getElementById('btn-delete-source').onclick = () => { closeModal('modal-source-detail'); deleteSource(s); };
   } catch (err) { body.innerHTML = `<p class="text-danger">${err.detail}</p>`; }
 }
 
@@ -189,26 +187,30 @@ async function openHardBooks(sourceId, title) {
   openModal('modal-hard-books');
   const body = document.getElementById('hard-books-body');
   body.innerHTML = 'Đang tải…';
-  document.querySelector('#modal-hard-books h2').textContent = `📗 Bản vật lý: ${title}`;
+  document.querySelector('#modal-hard-books h2').textContent = `Các chi nhánh có sách: ${title}`;
   try {
     const data = await api.getHardBooks({ source_id: sourceId, limit: 100 });
     const items = data?.items ?? data ?? [];
-    if (!items.length) { body.innerHTML = '<p class="empty-state">Chưa có bản vật lý nào.</p>'; return; }
+    if (!items.length) { body.innerHTML = '<p class="empty-state">Chưa có sách tại chi nhánh này.</p>'; return; }
     body.innerHTML = `<table class="data-table">
-      <thead><tr><th>Mã sách</th><th>Chi nhánh</th><th>Trạng thái</th><th>Vị trí</th></tr></thead>
+      <thead><tr><th>Mã bản sách</th><th>Chi nhánh</th><th>Trạng thái</th></tr></thead>
       <tbody>${items.map(h => `<tr>
-        <td>${h.hard_book_id}</td>
-        <td>${h.branch_id}</td>
+        <td>${h.id}</td>
+        <td>${h.branch?.name || h.branch_id}</td>
         <td>${fmtStatus(h.status)}</td>
-        <td>${h.location || '—'}</td>
       </tr>`).join('')}</tbody></table>`;
   } catch (err) { body.innerHTML = `<p class="text-danger">${err.detail}</p>`; }
 }
 
+let currentEditSource = null;
+
 function openSourceForm(source) {
   const form = document.getElementById('source-form');
+  const delBtn = document.getElementById('btn-delete-from-form');
   form.reset();
+  currentEditSource = source || null;
   document.getElementById('source-form-title').textContent = source ? 'Sửa đầu sách' : 'Thêm đầu sách';
+  delBtn.style.display = source ? 'inline-block' : 'none';
   if (source) {
     Object.entries(source).forEach(([k, v]) => {
       const el = form.elements[k];
@@ -218,14 +220,30 @@ function openSourceForm(source) {
   openModal('modal-source-form');
 }
 
+async function deleteCurrentSource() {
+  if (!currentEditSource) return;
+  const ok = await confirmDialog(`Xóa đầu sách "<b>${currentEditSource.title}</b>"?`);
+  if (!ok) return;
+  try {
+    await api.deleteSource(currentEditSource.id);
+    toast('Đã xóa đầu sách.', 'success');
+    closeModal('modal-source-form');
+    currentEditSource = null;
+    loadSources();
+  } catch (err) { handleApiError(err); }
+}
+
 async function submitSourceForm() {
   const form = document.getElementById('source-form');
+  const btn = document.getElementById('btn-submit-source');
   if (!form.checkValidity()) { form.reportValidity(); return; }
   const data = getFormData(form);
-  const id = data.source_id;
-  delete data.source_id;
-  if (data.publish_year) data.publish_year = parseInt(data.publish_year);
+  const id = data.id;
+  delete data.id;
+  if (data.publication_year) data.publication_year = parseInt(data.publication_year);
+  if (data.page_count) data.page_count = parseInt(data.page_count);
   if (data.price) data.price = parseFloat(data.price);
+  setButtonLoading(btn, true);
   try {
     if (id) {
       await api.updateSource(id, data);
@@ -235,15 +253,8 @@ async function submitSourceForm() {
       toast('Thêm đầu sách thành công!', 'success');
     }
     closeModal('modal-source-form');
+    currentEditSource = null;
     loadSources();
   } catch (err) { handleApiError(err); }
-}
-
-async function deleteSource(s) {
-  if (!confirm(`Xoá đầu sách "${s.title}"? Hành động này không thể hoàn tác.`)) return;
-  try {
-    await api.deleteSource(s.source_id);
-    toast('Đã xoá đầu sách.', 'success');
-    loadSources();
-  } catch (err) { handleApiError(err); }
+  finally { setButtonLoading(btn, false); }
 }

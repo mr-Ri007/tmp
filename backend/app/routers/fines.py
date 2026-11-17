@@ -4,10 +4,31 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.repositories.fine_repo import fine_repo
-from app.schemas.fine import FineAssessDamaged, FinePayRequest, FineResponse
+from app.schemas.fine import FineAssessDamaged, FinePageResponse, FinePayRequest, FineResponse
 from app.services.fine_service import fine_service
 
 router = APIRouter(prefix="/fines", tags=["Fines (Quản lý Tiền phạt)"])
+
+
+@router.get("/page", response_model=FinePageResponse)
+def get_fines_page(
+    db: Session = Depends(get_db),
+    reader_id: Optional[int] = Query(None, ge=1, description="Lọc theo hội viên"),
+    unpaid_only: bool = Query(False, description="Chỉ lấy các khoản phạt chưa thanh toán"),
+    fine_type: Optional[str] = Query(None, description="Lọc theo loại phạt: Late / Lost / Damaged"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """Lấy một trang tiền phạt kèm tổng số bản ghi khớp bộ lọc."""
+    filters = {
+        "reader_id": reader_id,
+        "unpaid_only": unpaid_only,
+        "fine_type": fine_type,
+    }
+    return {
+        "items": fine_repo.get_multi(db, **filters, skip=skip, limit=limit),
+        "total": fine_repo.get_count(db, **filters),
+    }
 
 
 @router.get("", response_model=List[FineResponse])

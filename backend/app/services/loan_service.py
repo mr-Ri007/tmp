@@ -54,6 +54,12 @@ class LoanService:
             )
 
         # 3. Kiểm tra trạng thái sách
+        if book.status == "MatSach":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bản sao sách này đã được ghi nhận là mất, không thể cho mượn."
+            )
+
         if book.status == "DangMuon":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -107,6 +113,7 @@ class LoanService:
             due_at=due_at
         )
         db.add(loan)
+        db.flush()
 
         # 8. Cập nhật trạng thái sách sang DangMuon
         book.status = "DangMuon"
