@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📚 Library Management System</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <span>📚</span> Thư Viện
+    </div>
+    <nav id="sidebar-nav">
+      <!-- populated by app.js -->
+    </nav>
+    <div class="sidebar-footer">
+      <div class="status-dot offline" id="status-dot"></div>
+      <span id="status-text">Đang kiểm tra…</span>
+    </div>
+  </nav>
+
+  <!-- ── Main wrapper ─────────────────────────────────────── -->
+  <div id="main-wrapper">
+
+    <!-- Topbar -->
+    <header id="topbar">
+      <button id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+      <span id="topbar-title">Hệ thống Quản lý Thư viện</span>
+      <a href="http://127.0.0.1:8000/docs" target="_blank" class="btn btn-secondary btn-sm">🔗 API Docs</a>
+    </header>
+
+    <!-- Page content renders here -->
+    <main id="main-content">
+      <div class="loading-spinner"><div></div><div></div><div></div></div>
+    </main>
+
+  </div><!-- /main-wrapper -->
+
+</div><!-- /app -->
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Entry point (ES module) -->
+<script type="module" src="js/app.js"></script>
+
+</body>
+</html>
